@@ -1,0 +1,161 @@
+---
+title: "RepData_PeerAssignment.Rmd"
+author: "Raj Gupta"
+date: "June 19, 2016"
+output: html_document
+---
+# Reproucible Research  Assignment 1
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+Dataset: Activity monitoring data [52K]
+The variables included in this dataset are:
+
+steps: Number of steps taking in a 5-minute interval (missing values are coded as 𝙽𝙰)
+date: The date on which the measurement was taken in YYYY-MM-DD format
+interval: Identifier for the 5-minute interval in which measurement was taken
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+
+## Data Analysis component required for the assignment
+
+
+1 Determine/ the Ideal Data Set -  Reading the Measured Data  and cleaning Data
+2  Exploratory Data Analysis 
+
+* Histogram of the total number of steps taken each day
+* Mean and median number of steps taken each day
+* Time series plot of the average number of steps taken
+* The 5-minute interval that, on average, contains the maximum number of steps
+* Code to describe and show a strategy for imputing missing data
+* Histogram of the total number of steps taken each day after missing values are imputed
+* Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+
+### Set global options
+
+
+```{r setoptions}
+
+
+library(knitr)
+library(ggplot2)
+library(data.table)
+library(xtable)
+library(VIM)
+```
+###  Reading the measured Data  and cleaning Data
+
+```{r}
+
+```{r ReadData }
+
+DFSteps <-read.csv("activity.csv",colClasses=c("integer","Date","integer"))
+
+summary(DFSteps)
+dt<-data.table(DFSteps)
+dt <- dt[, date := as.Date(date)]
+setkey(dt, date, interval)
+summary(dt)
+```
+###  Generating Analytical Data
+ 
+
+### Aggregate the number of steps taken each day.
+
+
+
+```{r GenerateAnlyticData }
+dtDaily <- dt[, list(sumSteps = sum(steps)), date]
+```
+
+### Generate  Explorartoy code and Data
+### Plot a histogram of the total number of steps taken each day.
+```{r GenerateHistogram  }
+
+ggplot(dtDaily, aes(x=sumSteps)) +
+    geom_histogram(alpha=1/2, binwidth=1000)
+```
+
+### Calculate the mean and median total number of steps taken per day before imputing.
+```{r GenerateMeanMedian} 
+tab <- dtDaily[, list(n = .N, nValid = sum(!is.na(sumSteps)), mean = mean(sumSteps, na.rm=TRUE), median = median(sumSteps, na.rm=TRUE))]
+```
+print(xtable(tab), type="html", include.rownames=FALSE)
+### Calculating average daily activity pattern
+```{r GenerateDataBeforeImputation } 
+dtDaily <- dtDaily[, status := "Before imputation"]
+dtDailyBeforeImputation <- dtDaily
+```
+
+### Plot a time series of the 5-minute interval and the average number of steps taken across all days.
+```{r GeneratePlot5MinINtervel}
+dtIntervals <- dt[, list(meanSteps = mean(steps, na.rm=TRUE)), interval]
+ggplot(dtIntervals, aes(x=interval, y=meanSteps)) + geom_line()
+```
+### Imputing Missing Values
+
+#### Calculate the total number of missing values.
+```{r GeneratetotalnumberofMissing }
+dt <- dt[, isStepsMissing := is.na(steps)]
+tab <- dt[, .N, isStepsMissing]
+```
+print(xtable(tab), type="html", include.rownames=FALSE)
+
+###Verify that there are no missing values for steps after imputation.
+
+dt <- kNN(dt)
+tab <- dt[, .N, list(isMissing = is.na(steps))]
+print(xtable(tab), type="html", include.rownames=FALSE)
+
+### After imputation of missing values
+
+Aggregate the number of steps taken each day.
+
+```{r Aggregate NoOfSteps}
+dtDaily <- dt[, list(sumSteps = sum(steps), isImputed = sum(steps) > 0), date]
+head(dtDaily)
+```
+###Plot a histogram of the total number of steps taken each day after imputing and compare with the histogram before imputing. Need to add an isImputed column to dtDailyBeforeImputation to make rbind work.
+```{r Plot Histogram}
+dtDaily <- dtDaily[, status := "After imputation"]
+dtDailyBeforeImputation <- dtDailyBeforeImputation[, isImputed := FALSE]
+dtDaily <- rbind(dtDaily, dtDailyBeforeImputation, use.names=TRUE)
+
+ggplot(dtDaily, aes(x=sumSteps, fill=isImputed)) +
+    geom_histogram(alpha=1/2, binwidth=1000) +
+  facet_wrap(~ status, nrow=2) +
+  theme(legend.position="bottom")
+```
+### Calculate the mean and median total number of steps taken per day after imputing.
+```{r MeanMedian}
+tab <- dtDaily[, list(n = .N, nValid = sum(!is.na(sumSteps)), mean = mean(sumSteps, na.rm=TRUE), median = median(sumSteps, na.rm=TRUE)), status]
+print(xtable(tab), type="html", include.rownames=FALSE)
+```
+
+### Are there differences in activity patterns between weekdays and weekends?
+```{r VerifyDifferencePattern}
+levels <- c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+newLevels <- c("Weekend", rep("Weekday", 5), "Weekend")
+dt <- dt[, dayOfWeek := factor(weekdays(date), levels=levels)]
+dt <- dt[, dayType := factor(newLevels[dayOfWeek])]
+dt[, .N, list(dayType, dayOfWeek)]
+```
+
+## Aggregate the average number of steps taken by 5-minute interval. Use the imputed values in the steps variable.
+### Plot two time series (one for weekdays and the other for weekends) of the 5-minute intervals and average number of steps taken (imputed values).
+
+```{r PlotTimeSeries}
+dtIntervals <- dt[, list(meanSteps = mean(steps, na.rm=TRUE)), list(dayType, interval)]
+
+
+ggplot(dtIntervals, aes(x=interval, y=meanSteps, color=dayType)) +
+    geom_line() +
+    facet_wrap(~ dayType, nrow=2) +
+    theme(legend.position="none")
+
+ggplot(dtIntervals, aes(x=interval, y=meanSteps, color=dayType)) +
+    geom_line() +
+    theme(legend.position="bottom")
+```
+
